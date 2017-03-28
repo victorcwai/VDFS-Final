@@ -9,7 +9,7 @@ VDFS consist of 2 types of servers. Volume server and Master server.
 Each Volume server stores the chunks of different objects. 
 Master server provides the list of Volume servers to client. It also provides mapping for objects and the location of their chunks.
 
-##Flow of VDFS
+## Flow of VDFS
 
 Upload:
   
@@ -26,33 +26,37 @@ Access/Download:
 4. Volume servers send the chunks to client
 5. Client read the data sequentially
 
-##Implementation
+## Implementation
 
-###TODO:
-- Client split to chunks /
-- Master server /
+### TODO:
+- [x] Client split to chunks /
+- [x] Master server /
 
 send: (upload)
-- Client send chunkName and chunks according to the volume list from master /
-- Client send list back to master /
-- Volume receive chunks in map[chunksID]chunks /
+- [x] Client send chunkName and chunks according to the volume list from master /
+- [x] Client send list back to master /
+- [x] Volume receive chunks in map[chunksID]chunks /
 
 receive: (download)
-- Client ask master for chunk list with file name /
-- Client get chunk from volumes /
-- Volume send chunks /
-- Client put chunk together /
+- [x] Client ask master for chunk list with file name /
+- [x] Client get chunk from volumes /
+- [x] Volume send chunks /
+- [x] Client put chunk together /
 
-##Evaluation and documentation
+## Evaluation and documentation
 
-###TODO:
-- test file correctness /
-- test multiple volume server
-- test in cloud/ real environment/multi instance
-- get log and produce stat and graph
-- make report/slides: draw protocol, specify problems, comparison of different DFS, see others’ work
+### TODO:
+- [x] test file correctness /
+- [x] test multiple volume server /
+- [x] test in cloud/ real environment/multi instance /
+- [ ] get log and produce stat and graph 
+- [ ] make report/slides: draw protocol, specify problems, comparison of different DFS, see others’ work
+- [ ] delete -> recycle buffer
+- [ ] locking
+- [ ] Change send buffer during last send to be not 65536 bytes
+- [ ] concurrently write read
 
-##Future improvements
+## Future improvements
 
 Cache file mapping and volume servers mapping
 Last chunk can be less than 128mb
