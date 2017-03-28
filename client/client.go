@@ -23,7 +23,7 @@ func main() {
 	//for {
 		//read from user
 		reader := bufio.NewReader(os.Stdin)
-		fmt.Print("Please enter 'rece <filename>' or 'send <filename>' to transfer files to the server\n\n")
+		fmt.Print("Please enter 'send <filename>', 'rece <filename>' or 'dele <filename>' to send, receive or delete files to/from the server respectively\n\n")
 		inputFromUser, _ := reader.ReadString('\n')
 		arrayOfCommands := strings.Split(inputFromUser, " ")
 		arrayOfCommands[1] = strings.Replace(arrayOfCommands[1],"\n","",-1)
@@ -39,6 +39,8 @@ func main() {
 			getFileFromServer(arrayOfCommands[1], connection, start)
 		} else if arrayOfCommands[0] == "send" {
 			sendFileToServer(arrayOfCommands[1], connection, start)
+		} else if arrayOfCommands[0] == "dele" {
+			deleteFileInServer(arrayOfCommands[1], connection, start)
 		} else {
 			fmt.Println("Bad Command")
 		}
@@ -90,7 +92,7 @@ func sendFileToServer(fileName string, connection net.Conn, start time.Time) {
 	for i:= 0; i < chunkCount; i += 1{
 		index := i%len(volumeServerMap) //to prevent index out of bound
 		fmt.Println("index:",index)
-		vsConnection, err := net.Dial("tcp", volumeServerMap[index])
+		vsConnection, _ := net.Dial("tcp", volumeServerMap[index])
 		
 		vsConnection.Write([]byte("send"))
 		
@@ -109,17 +111,17 @@ func sendFileToServer(fileName string, connection net.Conn, start time.Time) {
 		sentByte=0
 		//send until 1 chunk is completed, then move on to next volume server
 		for { 
-			_, err = file.Read(sendBuffer)
+			n, err := file.Read(sendBuffer)
 			if err == io.EOF {
 				break
 			}
-			n, err2 := vsConnection.Write(sendBuffer)
+			n2, err2 := vsConnection.Write(sendBuffer[:n])
 			if err2 != nil {
 				fmt.Println(err2)
 				return
 			}
-			if(n!=65536){
-				fmt.Println("n",n)
+			if(n2!=65536){
+				fmt.Println("n2",n2)
 			}
 			sentByte = sentByte+int64(n)
 			if(sentByte == CHUNKSIZE){
@@ -144,16 +146,19 @@ func getFileFromServer(fileName string, connection net.Conn, start time.Time) {
 
 	connection.Write([]byte("rece"))
 
-	enc := gob.NewEncoder(connection) // Will write to network.
+	enc := gob.NewEncoder(connection)
 	enc.Encode(fileName)
 
 	elapsed := time.Since(start)
     fmt.Printf("Sending request took %s\n", elapsed)
 	
 	var chunkList []string
-	dec := gob.NewDecoder(connection) // Will write to network.
+	dec := gob.NewDecoder(connection)
 	dec.Decode(&chunkList)
-
+	if(chunkList==nil){
+		fmt.Println("File not found.")
+		return
+	}
 	fmt.Println("chunkList:",chunkList)
 	// bufferFileSize := make([]byte, 10)
 
@@ -175,7 +180,7 @@ func getFileFromServer(fileName string, connection net.Conn, start time.Time) {
 		// vsEnc.Encode(chunkName) //send file name first
 		fmt.Println("chunkName:",chunkName)
 		receivedBytes=0
-		//send until 1 chunk is completed, then move on to next volume server
+		//receive until 1 chunk is completed, then move on to next volume server
 		for { 
 			n,err := io.CopyN(file, vsConnection, BUFFERSIZE)
 			receivedBytes += int64(n)
@@ -196,6 +201,41 @@ func getFileFromServer(fileName string, connection net.Conn, start time.Time) {
 	file.Close()
 	connection.Close()
     fmt.Println("Finished receiving.")
+	return
+
+}
+
+func deleteFileInServer(fileName string, connection net.Conn, start time.Time) {	    
+	fmt.Println("receive from server")
+
+	connection.Write([]byte("dele"))
+
+	enc := gob.NewEncoder(connection) 
+	enc.Encode(fileName)
+
+	elapsed := time.Since(start)
+    fmt.Printf("Sending request took %s\n", elapsed)
+	
+	var chunkList []string
+	dec := gob.NewDecoder(connection)
+	dec.Decode(&chunkList)
+
+	fmt.Println("chunkList:",chunkList)
+		for i:= 0; i < len(chunkList); i += 1{
+		vsConnection, _ := net.Dial("tcp", chunkList[i])
+		vsConnection.Write([]byte("dele"))
+		// vsEnc := gob.NewEncoder(vsConnection) // Will write to network.
+		chunkName := fillString(fileName+strconv.Itoa(i),64)
+		vsConnection.Write([]byte(chunkName))
+		// vsEnc.Encode(chunkName) //send file name first
+		fmt.Println("chunkName:",chunkName)
+		vsConnection.Close()
+		fmt.Println("Done chunk",i)
+	}
+	fmt.Println("Deleting file complete.")
+
+	connection.Close()
+    fmt.Println("Finished deleting.")
 	return
 
 }
