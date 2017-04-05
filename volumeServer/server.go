@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 	"log"
+	"os"
 	// "encoding/gob"
 	"github.com/streamrail/concurrent-map"
 )
@@ -21,20 +22,15 @@ const BUFFERSIZE = 65536
 const CHUNKSIZE int64 = 134217728 //2^27
 
 func main() {
-    //pool := make([][]byte, 100)
     mapping := cmap.New()
-    // dataChan := make(chan []byte)
-    // stringChan := make(chan string)
-    // bufCount := 0
 
-	fmt.Println("Volume server start listening")
-
-	server, error := net.Listen("tcp", ":2001")
+	server, error := net.Listen("tcp", os.Args[1])
 	if error != nil {
 		fmt.Println("There was an error starting the server" + error.Error())
 		return
 	}
-	// var received string
+
+	fmt.Println("Volume server start listening")
 
 	//infinate loop
 	for {
@@ -44,7 +40,7 @@ func main() {
 			fmt.Println("There was am error with the connection" + error.Error())
 			return
 		}
-		//handle the connection, on it's own thread, per connection
+		//one goroutine per connection
 		go ConnectionHandler(connection,mapping)
 
 	}
@@ -54,37 +50,20 @@ func ConnectionHandler(connection net.Conn, mapping cmap.ConcurrentMap) {
 	fmt.Println("Connected")
 
 	bufferCommand := make([]byte, 4)
-	bufferFileName := make([]byte, 64)
+	bufferChunkName := make([]byte, 64)
 
-	// _, error := connection.Read(buffer)
-	// if error != nil {
-	// 	fmt.Println("There is an error reading from connection", error.Error())
-	// 	stringChan<-"failed"
-	// 	return 
-	// }
 	connection.Read(bufferCommand)
 	command := string(bufferCommand)
 
-	// dec := gob.NewDecoder(connection) // Will read from network.
-	// var fileName string
-	// dec.Decode(&fileName)
-	connection.Read(bufferFileName)
-	fileName := string(bufferFileName)
-	fileName = strings.Trim(string(fileName), ":")
-	// connection.Read(bufferFileName)
-	// fileName := strings.Trim(string(bufferFileName), ":")
+	connection.Read(bufferChunkName)
+	chunkName := string(bufferChunkName)
+	chunkName = strings.Trim(string(chunkName), ":")
 
 	fmt.Println("Command is: " + command)
-	fmt.Println("fileName is: " + fileName)
-	// fmt.Println("File name is: ",[]byte(fileName))
+	fmt.Println("chunkName is: " + chunkName)
 	
-	//loop until disconnect?
 	start := time.Now()
 	if (command == "send"){
-		// bufferFileSize := make([]byte, 10)
-		// connection.Read(bufferFileSize)
-		
-		// fmt.Println("File size is: " + string(bufferFileSize))
 		//make a buffer to hold data		
 	    var bufferFile bytes.Buffer
 	    writer := bufio.NewWriter(&bufferFile)
@@ -92,61 +71,36 @@ func ConnectionHandler(connection net.Conn, mapping cmap.ConcurrentMap) {
 		var receivedBytes int64
 	    receivedBytes=0
 		for {
-			// if (fileSize - receivedBytes) < BUFFERSIZE { //if there is no need for next read,
-			// 	io.CopyN(writer, connection, (fileSize - receivedBytes))
-			// 	connection.Read(make([]byte, (receivedBytes+BUFFERSIZE)-fileSize)) //to clear remaining bytes in the buffer
-			// 	break
-			// }
 
 			if(CHUNKSIZE<=receivedBytes){
 				break
 			}
 			n,err := io.CopyN(writer, connection, BUFFERSIZE)
 			receivedBytes += n
-			// if(n!=65536){
-			// 	fmt.Println("n",n)
-			// 	fmt.Println("receivedBytes",receivedBytes)
-			// 	fmt.Println("err fileName",fileName)
-			// }
 			if err != nil {
-				fmt.Println("err", err.Error())
-				fmt.Println("err fileName",fileName)
+				fmt.Println("err", err.Error(), chunkName)
 				break
 			}
-			// log.Println("READ: ",receivedBytes)
 		}
-		mapping.Set(fileName,bufferFile.Bytes())
-		//fmt.Println("len(mapping[fileName])",len(mapping.Get(fileName)))
+		mapping.Set(chunkName,bufferFile.Bytes())
 		elapsed := time.Since(start)
 	    fmt.Printf("Storing file took %s\n", elapsed)
 
 		for k := range mapping.Iter() {
-        	fmt.Printf("%s\n", k)
+        	fmt.Printf("%s\n", k.Key)
     	}
-		// fmt.Println(string(pool[bufCount]))
-		// runtime.GC()
 		var m runtime.MemStats  
 	    runtime.ReadMemStats(&m)
 	    fmt.Printf("%d,%d,%d,%d\n", m.HeapSys, m.HeapAlloc, m.HeapIdle, m.HeapReleased)
 		log.Println("Memory Acquired: ", m.Sys)
 		log.Println("Memory Used    : ", m.Alloc)
 
-		// stringChan<-"send"
-		// dataChan<-bufferFile.Bytes()
-		// stringChan<-fileName
 		connection.Close()
 
 	}else if (command == "rece"){
-		//fmt.Println("mapping[fileName] return: %v",mapping[fileName])
-		
-		// bufferFileSize := fillString(strconv.FormatInt(int64(len(mapping[fileName])), 10), 10)
 		elapsed := time.Since(start)
 	    fmt.Printf("File access took %s\n", elapsed)
-		// connection.Write([]byte(bufferFileSize))
-		// fmt.Println("File size is: " + string(bufferFileSize))
-		// fileSize, _ := strconv.ParseInt(strings.Trim(string(bufferFileSize), ":"), 10, 64)
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	    fileData,_ := mapping.Get(fileName)
+	    fileData,_ := mapping.Get(chunkName)
 	    fileBytes := fileData.([]byte)
 		reader := bytes.NewReader(fileBytes)
 		fileSize := len(fileBytes)
@@ -154,12 +108,6 @@ func ConnectionHandler(connection net.Conn, mapping cmap.ConcurrentMap) {
 
 		var sentBytes int64
 		for {
-
-			// if (len(mapping[fileName]) - sentBytes) < BUFFERSIZE { //if there is no need for next read,
-			// 	reader.Read(sendBuffer)
-			// 	connection.Write(sendBuffer)
-			// 	break
-			// }
 			if (int64(fileSize) - sentBytes <= 0){
 				break
 			}
@@ -170,21 +118,18 @@ func ConnectionHandler(connection net.Conn, mapping cmap.ConcurrentMap) {
 
 			_,err2 := connection.Write(sendBuffer[:n])
 			if err2 != nil {
-				fmt.Println("err2", err2.Error())
-				fmt.Println("err fileName",fileName)
+				fmt.Println("err2", err2.Error(), chunkName)
 				break
 			}
 			sentBytes += int64(n)
 		}
 
-		//connection.Write(fileBytes)
-
 		connection.Close()
 		fmt.Println("Finished sending.")
 
 	}else if (command == "dele") {
-		mapping.Remove(fileName)
-		fmt.Println("Chunk", fileName ,"deleted successfully.")
+		mapping.Remove(chunkName)
+		fmt.Println("Chunk", chunkName ,"deleted successfully.")
 	}else {
 		fmt.Println("Bad command received, ConnectionHandler finished")
 		return;
