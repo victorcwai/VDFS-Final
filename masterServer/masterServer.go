@@ -9,6 +9,7 @@ import (
 	"encoding/gob"
 	"log"
 	"github.com/streamrail/concurrent-map"
+	"os"
 )
 
 const BUFFERSIZE = 65536
@@ -18,15 +19,18 @@ func main() {
     volumeServerMap := make(map[int]string) //{volume server id, url}
     fileChunkMap := cmap.New() //{file id, {chunks url}}
 
-    volumeServerMap[0] = "localhost:2001"
+    // volumeServerMap[0] = "localhost:2001"
+    // volumeServerMap[1] = "localhost:2002"
 	fmt.Println("Master server start listening")
 
-	server, error := net.Listen("tcp", ":2000")
+	server, error := net.Listen("tcp", os.Args[1])
 	if error != nil {
 		fmt.Println("There was an error starting the server" + error.Error())
 		return
 	}
-
+	for i:=0;i<len(os.Args)-2;i++{
+		volumeServerMap[i] = os.Args[i+2]
+	}
 	//infinate loop
 	for {
 
@@ -51,7 +55,6 @@ func ConnectionHandler(connection net.Conn, volumeServerMap map[int]string,fileC
 	if(command=="send"){
 		//send volumeServerMapping to client
 		//then receive chunkList from client and update chunkMap
-		
 		enc := gob.NewEncoder(connection) // Will write to network.
 	    dec := gob.NewDecoder(connection) // Will read from network.
 		
@@ -70,7 +73,7 @@ func ConnectionHandler(connection net.Conn, volumeServerMap map[int]string,fileC
 	    connection.Close()
 	    
 	    fmt.Println(volumeServerMap)
-		fmt.Println(fileChunkMap)
+		// fmt.Println(fileChunkMap)
 
 		elapsed := time.Since(start)
 		fmt.Printf("Request took %s\n", elapsed)
@@ -120,21 +123,4 @@ func ConnectionHandler(connection net.Conn, volumeServerMap map[int]string,fileC
     fmt.Println("Request finished.")
 
 }
-
-
-// func fillString(returnString string, toLength int) string {
-// 	byteBuffer := bytes.NewBufferString(returnString)
-// 	lengthString := len(returnString)
-// 	count := toLength-lengthString
-// 	for {
-// 		if count > 0 {
-// 			byteBuffer.WriteString(":")
-// 			count -= 1
-// 			continue
-// 		}
-// 		break
-// 	}
-// 	return byteBuffer.String()
-// }
-
 // // END master SERVER //
