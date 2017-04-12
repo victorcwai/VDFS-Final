@@ -23,7 +23,7 @@ const CHUNKSIZE int64 = 134217728 //2^27
 
 func main() {
     mapping := cmap.New() //{chunk id, chunk bytes}
-	fileChunkMap := cmap.New() //{file id, {chunks url}}
+	fileChunkMap := cmap.New() //{file id, chunks count}
 	server, error := net.Listen("tcp", os.Args[1])
 	if error != nil {
 		fmt.Println("There was an error starting the server" + error.Error())
@@ -99,13 +99,8 @@ func setChunkList(connection net.Conn, fileChunkMap cmap.ConcurrentMap, start ti
     dec.Decode(&chunkList)
     fmt.Printf("chunkList received : %v\n", chunkList);
 
-    fileChunkMap.Set(chunkList[0],chunkList[1:]) //chunkList[0] = ID
+    fileChunkMap.Set(chunkList[0],chunkList[1]) //chunkList[0] = ID
     connection.Close()
-    
-	fmt.Println(fileChunkMap)
-
-	elapsed := time.Since(start)
-	fmt.Printf("Request took %s\n", elapsed)
 }
 
 func getChunkList(connection net.Conn, fileChunkMap cmap.ConcurrentMap, start time.Time){
@@ -118,17 +113,15 @@ func getChunkList(connection net.Conn, fileChunkMap cmap.ConcurrentMap, start ti
 	fmt.Println("File name is: " + fileName)
 
 	enc := gob.NewEncoder(connection)
-	chunkURLs,ok := fileChunkMap.Get(fileName)
+	chunkCount,ok := fileChunkMap.Get(fileName)
 	if(ok==false){
 		fmt.Println("File not found. Request finished.")
 		return
 	}
-	err := enc.Encode(chunkURLs)
+	err := enc.Encode(chunkCount)
     if err != nil {
     	log.Fatal("encode error:", err)
     }
-	elapsed := time.Since(start)
-	fmt.Printf("Request took %s\n", elapsed)
 }
 
 func receiveChunk(chunkName string, connection net.Conn, mapping cmap.ConcurrentMap, start time.Time){
@@ -154,9 +147,9 @@ func receiveChunk(chunkName string, connection net.Conn, mapping cmap.Concurrent
 	elapsed := time.Since(start)
     fmt.Printf("Storing file took %s\n", elapsed)
 
-	for k := range mapping.Iter() {
-    	fmt.Printf("%s\n", k.Key)
-	}
+	// for k := range mapping.Iter() {
+ //    	fmt.Printf("%s\n", k.)
+	// }
 
 	// var m runtime.MemStats  
  //    runtime.ReadMemStats(&m)
