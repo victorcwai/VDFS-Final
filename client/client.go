@@ -81,8 +81,9 @@ func SendFileToServer(fileName string, start time.Time) {
 	for i := fileInfo.Size(); i > 0; i -= CHUNKSIZE{
 		chunkCount+=1
 	}
-	chunkList := make([]string, chunkCount+1)
-	chunkList[0] = fileInfo.Name()
+	nameChunkCount := make([]string, 2)
+	nameChunkCount[0] = fileInfo.Name()
+	nameChunkCount[1] = strconv.Itoa(chunkCount)
 
 	fmt.Println("chunkCount=",chunkCount)
 	fmt.Println("Start sending file")
@@ -101,7 +102,7 @@ func SendFileToServer(fileName string, start time.Time) {
 		fmt.Println(volumeServerList[index])
 		vsConnection.Write([]byte("send"))
 		
-		chunkList[i+1] = volumeServerList[index]
+		// chunkList[i+1] = volumeServerList[index]
 		
 		vsConnection.Write([]byte(fillString(chunkName, 64)))      
 		var sentByte int64
@@ -132,12 +133,12 @@ func SendFileToServer(fileName string, start time.Time) {
 	fmt.Println("Finished sending.")
 	file.Close()
 			
-	//send chunkList to a server
+	//send nameChunkCount to a server
 	index2 := hash(fileName)%uint32(len(volumeServerList))
 	connection, _ := net.Dial("tcp", volumeServerList[index2])
 	connection.Write([]byte("setL"))
 	enc := gob.NewEncoder(connection)
-	enc.Encode(chunkList)
+	enc.Encode(nameChunkCount)
 	connection.Close()
 
 	elapsed := time.Since(start)
@@ -156,36 +157,32 @@ func GetFileFromServer(fileName string, start time.Time) {
 	enc := gob.NewEncoder(connection)
 	enc.Encode(fileName)
 	
-	var chunkList []string
+	var chunkCountStr string
 	dec := gob.NewDecoder(connection)
-	dec.Decode(&chunkList)
-	if(chunkList==nil){
-		fmt.Println("File not found.")
-		return
-	}
+	dec.Decode(&chunkCountStr)
 	connection.Close()
-
-	fmt.Println("chunkList:",chunkList)
+	chunkCount,_ := strconv.Atoi(chunkCountStr)
+	fmt.Println("chunkCount:",chunkCount)
 
 	c := make(chan *receivedBlock)
 	var wg sync.WaitGroup
 	wg.Add(1)
-	go blockAssembler(c,len(chunkList),fileName,&wg,start)
+	go blockAssembler(c,chunkCount,fileName,&wg,start)
 	
 	maxGoroutines := 3
     guard := make(chan struct{}, maxGoroutines)
 
-	for i:= len(chunkList)-1; i >= 0; i -= 1{
+	for i:= chunkCount-1; i >= 0; i -= 1{
 		wg.Add(1)
 		go func(i int,c chan *receivedBlock){
 			defer wg.Done()
 			guard <- struct{}{} // would block if guard channel is already filled
-
-			vsConnection, _ := net.Dial("tcp", chunkList[i])
+			chunkName := fileName+strconv.Itoa(i)
+			index2 := hash(chunkName)%uint32(len(volumeServerList))
+			vsConnection, _ := net.Dial("tcp", volumeServerList[index2])
 			vsConnection.Write([]byte("rece"))
 			var bufferFile bytes.Buffer
 		    writer := bufio.NewWriter(&bufferFile)
-			chunkName := fileName+strconv.Itoa(i)
 			vsConnection.Write([]byte(fillString(chunkName,64)))
 			fmt.Println("chunkName:",chunkName)
 			var receivedBytes int64
@@ -233,17 +230,19 @@ func DeleteFileInServer(fileName string, start time.Time) {
 	// enc := gob.NewEncoder(connection) 
 	// enc.Encode(fileName)
 	
-	var chunkList []string
+	var chunkCountStr string
 	dec := gob.NewDecoder(connection)
-	dec.Decode(&chunkList)
+	dec.Decode(&chunkCountStr)
 	connection.Close()
+	chunkCount,_ := strconv.Atoi(chunkCountStr)
+	fmt.Println("chunkCount:",chunkCount)
 
-	fmt.Println("chunkList:",chunkList)
-	for i:= 0; i < len(chunkList); i += 1{
-		vsConnection, _ := net.Dial("tcp", chunkList[i])
+	for i:= 0; i < chunkCount; i += 1{
+		chunkName := fileName+strconv.Itoa(i)
+		index2 := hash(chunkName)%uint32(len(volumeServerList))
+		vsConnection, _ := net.Dial("tcp", volumeServerList[index2])
 		vsConnection.Write([]byte("dele"))
-		chunkName := fillString(fileName+strconv.Itoa(i),64)
-		vsConnection.Write([]byte(chunkName))
+		vsConnection.Write([]byte(fillString(chunkName,64)))
 		fmt.Println("chunkName:",chunkName)
 		vsConnection.Close()
 		fmt.Println("Done chunk",i)
