@@ -16,12 +16,13 @@ import (
 	"sync"
 	"encoding/gob"
 	// "math/rand"
-	"hash/fnv"
+	//"hash/fnv"
 )
 
 const BUFFERSIZE = 65536
 const CHUNKSIZE int64 = 134217728 //2^27
-var volumeServerList = []string{"localhost:2001","localhost:2002"}
+var volumeServerList = []string{"10.140.0.2:2001","10.140.0.3:2001","10.140.0.4:2001","10.140.0.5:2001","10.140.0.7:2001"}
+var hasher Hasher = jump.New(len(volumeServerList), jump.FNV1a))
 
 type receivedBlock struct {
     data []byte
@@ -49,7 +50,7 @@ func main() {
 }
 
 func SendFileToServer(fileName string, start time.Time) {
-
+	
 	fmt.Println("Send to server")
 	var err error
 
@@ -92,7 +93,7 @@ func SendFileToServer(fileName string, start time.Time) {
 	for i:= 0; i < chunkCount; i += 1{
 		//send until 1 chunk is completed, then move on to next chunk and volume server
 		chunkName := fileInfo.Name()+strconv.Itoa(i)
-		index := hash(chunkName)% uint32(len(volumeServerList))
+		index := hasher.Hash(chunkName)
 		
 		fmt.Println("chunkName:",chunkName)  
 		fmt.Println("index:",index)
@@ -134,7 +135,7 @@ func SendFileToServer(fileName string, start time.Time) {
 	file.Close()
 			
 	//send nameChunkCount to a server
-	index2 := hash(fileName)%uint32(len(volumeServerList))
+	index2 := hasher.Hash(fileName)
 	connection, _ := net.Dial("tcp", volumeServerList[index2])
 	connection.Write([]byte("setL"))
 	enc := gob.NewEncoder(connection)
@@ -149,7 +150,7 @@ func SendFileToServer(fileName string, start time.Time) {
 func GetFileFromServer(fileName string, start time.Time) {
     fmt.Println("Receive from server")
 	
-	index := hash(fileName)%uint32(len(volumeServerList))
+	index := hasher.Hash(fileName)
 	connection, _ := net.Dial("tcp", volumeServerList[index])
 
 	connection.Write([]byte("getL"))
@@ -178,7 +179,7 @@ func GetFileFromServer(fileName string, start time.Time) {
 			defer wg.Done()
 			guard <- struct{}{} // would block if guard channel is already filled
 			chunkName := fileName+strconv.Itoa(i)
-			index2 := hash(chunkName)%uint32(len(volumeServerList))
+			index2 := hasher.Hash(chunkName)
 			vsConnection, _ := net.Dial("tcp", volumeServerList[index2])
 			vsConnection.Write([]byte("rece"))
 			var bufferFile bytes.Buffer
@@ -222,7 +223,7 @@ func GetFileFromServer(fileName string, start time.Time) {
 func DeleteFileInServer(fileName string, start time.Time) {	    
 	fmt.Println("Delete from server")
 	
-	index := hash(fileName)%uint32(len(volumeServerList))
+	index := hasher.Hash(fileName)
 	connection, _ := net.Dial("tcp", volumeServerList[index])
 
 	connection.Write([]byte("getL"))
@@ -239,7 +240,7 @@ func DeleteFileInServer(fileName string, start time.Time) {
 
 	for i:= 0; i < chunkCount; i += 1{
 		chunkName := fileName+strconv.Itoa(i)
-		index2 := hash(chunkName)%uint32(len(volumeServerList))
+		index2 := hasher.Hash(chunkName)
 		vsConnection, _ := net.Dial("tcp", volumeServerList[index2])
 		vsConnection.Write([]byte("dele"))
 		vsConnection.Write([]byte(fillString(chunkName,64)))
@@ -307,12 +308,6 @@ func blockAssembler(c chan *receivedBlock, chunkNum int, fileName string, wg *sy
 	fmt.Println("Block Assembler done.")
     elapsed := time.Since(start)
     fmt.Printf("Receiving file in memory took %s\n", elapsed)
-}
-
-func hash(s string) uint32 {
-        h := fnv.New32a()
-        h.Write([]byte(s))
-        return h.Sum32()
 }
 
 func fillString(returnString string, toLength int) string {
