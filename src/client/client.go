@@ -22,7 +22,7 @@ import (
 
 const BUFFERSIZE = 65536
 const CHUNKSIZE int64 = 134217728 //2^27
-var volumeServerList = []string{"10.140.0.2:2001","10.140.0.3:2001","10.140.0.4:2001","10.140.0.5:2001","10.140.0.7:2001"}
+var volumeServerList = []string{"10.138.0.2:2001","10.138.0.3:2001","10.138.0.4:2001","10.138.0.5:2001","10.138.0.6:2001"}
 var hasher *jump.Hasher = jump.New(len(volumeServerList), jump.FNV1a)
 
 type receivedBlock struct {
