@@ -94,7 +94,7 @@ func SendFileToServer(fileName string, start time.Time) {
 	for i:= 0; i < chunkCount; i += 1{
 		//send until 1 chunk is completed, then move on to next chunk and volume server
 		chunkName := fileInfo.Name()+strconv.Itoa(i)
-		index := i%len(volumeServerList)
+		index := hasher.Hash(chunkName)
 		
 		fmt.Println("chunkName:",chunkName)  
 		fmt.Println("index:",index)
@@ -144,12 +144,12 @@ func SendFileToServer(fileName string, start time.Time) {
 	connection.Close()
 
 	elapsed := time.Since(start)
-    fmt.Printf("Sending flie took %s\n", elapsed)
-    return
+    	fmt.Printf("Sending flie took %s\n", elapsed)
+    	return
 }
 
 func GetFileFromServer(fileName string, start time.Time) []byte{
-    fmt.Println("Receive from server")
+    	fmt.Println("Receive from server")
 	
 	index := hasher.Hash(fileName)
 	connection, _ := net.Dial("tcp", volumeServerList[index])
@@ -173,7 +173,7 @@ func GetFileFromServer(fileName string, start time.Time) []byte{
 	go blockAssembler(c,chunkCount,fileName,start,c2)
 	
 	maxGoroutines := 4
-    guard := make(chan struct{}, maxGoroutines)
+        guard := make(chan struct{}, maxGoroutines)
 	
 	for i:= 0; i < chunkCount; i += 1{
 		guard <- struct{}{} // would block if guard channel is already filled
@@ -181,7 +181,7 @@ func GetFileFromServer(fileName string, start time.Time) []byte{
 		go func(i int,c chan *receivedBlock){
 			defer wg.Done()
 			chunkName := fileName+strconv.Itoa(i)
-			index2 := i%len(volumeServerList)
+			index2 := hasher.Hash(chunkName)
 			vsConnection, _ := net.Dial("tcp", volumeServerList[index2])
 			vsConnection.Write([]byte("rece"))
 			var bufferFile bytes.Buffer
@@ -241,7 +241,7 @@ func DeleteFileInServer(fileName string, start time.Time) {
 
 	for i:= 0; i < chunkCount; i += 1{
 		chunkName := fileName+strconv.Itoa(i)
-		index2 := i%len(volumeServerList)
+		index2 := hasher.Hash(chunkName)
 		vsConnection, _ := net.Dial("tcp", volumeServerList[index2])
 		vsConnection.Write([]byte("dele"))
 		vsConnection.Write([]byte(fillString(chunkName,64)))
@@ -251,9 +251,9 @@ func DeleteFileInServer(fileName string, start time.Time) {
 	}
 	fmt.Println("Deleting file complete.")
 
-    fmt.Println("Finished deleting.")
-    elapsed := time.Since(start)
-    fmt.Printf("Sending request for deleting flie took %s\n", elapsed)
+    	fmt.Println("Finished deleting.")
+    	elapsed := time.Since(start)
+   	fmt.Printf("Sending request for deleting flie took %s\n", elapsed)
 
 	return
 
@@ -318,8 +318,8 @@ func blockAssembler(c chan *receivedBlock, chunkNum int, fileName string, start 
 	}
 
 	fmt.Println("Block Assembler done.")
-    elapsed := time.Since(start)
-    fmt.Printf("Receiving file in memory took %s\n", elapsed)
+  	elapsed := time.Since(start)
+    	fmt.Printf("Receiving file in memory took %s\n", elapsed)
 	c2 <- file
 }
 
